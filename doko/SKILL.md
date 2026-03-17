@@ -15,7 +15,7 @@ allowed-tools: Bash
 required-env: DOKO_API_KEY
 metadata:
   author: dokobot
-  version: "1.4.0"
+  version: "1.5.2"
   openclaw: {"requires": {"env": ["DOKO_API_KEY"], "bins": ["curl"]}, "primaryEnv": "DOKO_API_KEY"}
 ---
 

@@ -10,13 +10,12 @@ read_when:
   - Scraping pages that block headless browsers or bots
 emoji: "🌐"
 homepage: https://dokobot.ai
-compatibility: Requires curl, DOKO_API_KEY environment variable, and Chrome browser with Dokobot extension for the read command.
+compatibility: Requires @dokobot/cli (npm install -g @dokobot/cli) and Chrome browser with Dokobot extension. Local mode needs bridge (dokobot install-bridge). Remote mode needs DOKO_API_KEY.
 allowed-tools: Bash
-required-env: DOKO_API_KEY
 metadata:
   author: dokobot
-  version: "1.5.2"
-  openclaw: {"requires": {"env": ["DOKO_API_KEY"], "bins": ["curl"]}, "primaryEnv": "DOKO_API_KEY"}
+  version: "2.3.5"
+  openclaw: {"requires": {"bins": ["dokobot"]}, "optionalEnv": ["DOKO_API_KEY"]}
 ---
 
 # Dokobot — Read Web Pages with a Real Browser
@@ -25,231 +24,80 @@ Read, extract, and search web content through a real Chrome browser session. Unl
 
 Also useful for multilingual tasks: translate web pages (网页翻译), summarize articles (文章总结), and extract content (内容提取) in any language. Supports web search (联网搜索) and reading from social platforms like Twitter/X, Reddit, YouTube, GitHub, LinkedIn, Facebook, Instagram, WeChat articles (微信公众号), Weibo (微博), Zhihu (知乎), Xiaohongshu (小红书), and Bilibili (B站).
 
-All commands require `DOKO_API_KEY` environment variable.
-
-**Usage**: `/doko <command> [arguments]`
-
-Command: $ARGUMENTS[0]
+Supports two modes: **local** (free, unlimited, via local bridge) and **remote** (via cloud API with `DOKO_API_KEY`).
 
 ## Prerequisites
-- `DOKO_API_KEY` is set in environment (configure in `.claude/settings.local.json`)
-- If no API Key is set, ask the user to create one at the Dokobot dashboard: https://dokobot.ai/dashboard/api-keys
+- `@dokobot/cli` installed globally (`npm install -g @dokobot/cli`)
+- Chrome browser with Dokobot extension installed
+- **For local mode**: bridge installed (`dokobot install-bridge`)
+- **For remote mode**: `DOKO_API_KEY` set via `dokobot config`, Remote Control enabled in extension
+- If no API Key is set, ask the user to create one at the Dokobot dashboard: https://dokobot.ai/dashboard/api-keys, then run `dokobot config`
 
-## How it works
-The `read` command connects to a Dokobot Chrome extension that captures the fully rendered page content and returns it as structured text. The extension must be installed and running in the user's browser.
+## Discovering commands
 
-## Commands
-
-### read
-
-Read a web page via the Chrome extension and return its content.
-
-**Usage**: `/doko read <url> [--screens N] [--timeout S] [--device ID] [--format text|chunks] [--reuse-tab] [sessionId]`
-
-**Requires**: Chrome browser open with Dokobot extension installed, logged in, and Remote Control enabled.
-
-**Args**: $ARGUMENTS[1] $ARGUMENTS[2] $ARGUMENTS[3] $ARGUMENTS[4] $ARGUMENTS[5] $ARGUMENTS[6] $ARGUMENTS[7] $ARGUMENTS[8] $ARGUMENTS[9]
-
-First non-flag argument is `url`, `sessionId`. Named flags:
-- `--screens N` → `screens`: Screens to collect (1 = no scroll, 3 = 3 screens) (default: 1)
-- `--timeout S` → `timeout`: Timeout in seconds (default: 300)
-- `--device ID` → `deviceId`: Target device ID (from `/doko dokos`)
-- `--format text|chunks` → `format`: Response format: `text` (default) returns only text; `chunks` returns full segmented data with `bounds` coordinates (default: text)
-- `--reuse-tab` → `reuseTab`: Reuse an existing tab with the same URL instead of opening a new one (default: false)
+Run `dokobot --help` to list available commands. Run `dokobot <command> --help` to see full usage, flags, and defaults for any command.
 
 ```bash
-curl -s --max-time 330 -X POST "https://dokobot.ai/api/tools/read" \
-  -H "Authorization: Bearer $DOKO_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "<URL>"}'
+dokobot --help
+dokobot read --help
+dokobot search --help
 ```
 
-**Response schema** (default `format: "text"`):
-```typescript
-{
-  text?: string
-  sessionId: string
-  canContinue: unknown
-}
-```
+Always refer to `--help` output for the authoritative list of parameters and defaults. Do NOT assume flags or defaults from memory.
 
-Pass `"format": "chunks"` in the request body to get segmented data with coordinates.
+## Core commands
 
-**Response schema** (`format: "chunks"`):
-```typescript
-{
-  text?: string
-  chunks: Array<{
-      id: string
-      sourceIds: Array<string>
-      text: string
-      bounds: [number, number, number, number]
-    }>
-  sessionId: string
-  canContinue: unknown
-}
-```
+| Command | Description | Example |
+|---------|-------------|---------|
+| `read <url>` | Read a web page and return text | `dokobot read 'https://dokobot.ai/about'` |
+| `search <query>` | Web search | `dokobot search 'latest news'` |
+| `download images <url>` | Download images from a web page (supports private/lazy-loaded images) | `dokobot download images --local 'https://dokobot.ai/about'` |
+| `list` | List connected devices | `dokobot doko list` |
+| `close <id>` | Close an active read session | `dokobot doko close <SESSION_ID>` |
 
-Adjust curl `--max-time` to `timeout + 30` when `--timeout` is specified. When `--screens`, `--timeout`, `--format`, or `--reuse-tab` is specified, add the corresponding field to the JSON body (e.g., `{"url": "...", "screens": 3, "format": "chunks", "reuseTab": true}`). Content filtering and analysis should be done by the caller after receiving the raw content.
+## Behavioral guidance
 
-**Tab reuse**: By default, a new tab is opened for each read. Use `--reuse-tab` to reuse an existing tab with the same URL (the tab will not be reloaded or closed after reading).
+These are things `--help` does not cover:
 
-**Concurrency**: Multiple read requests can run in parallel (each opens a separate browser tab). Recommended maximum: **5 concurrent calls**. Beyond that, returns diminish due to shared browser resources.
+### Local vs Remote mode
+- `--local`: Free and unlimited. Reads through the local bridge without any server. Requires `dokobot install-bridge` and Chrome with the extension.
+- Remote (default): Reads through the cloud API. Requires `DOKO_API_KEY` and Remote Control enabled in the extension.
+- Prefer `--local` when the user has Chrome open locally. Use remote when accessing browsers on other machines.
 
-**Session continuity**: When `canContinue` is `true`, pass the returned `sessionId` to continue reading from where you stopped:
+### Session continuity
+When a read result includes `canContinue` and `sessionId`, pass the session ID to continue reading from where it stopped:
 ```bash
-curl -s --max-time 330 -X POST "{{BASE_URL}}/api/tools/read" \
-  -H "Authorization: Bearer $DOKO_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"sessionId": "<SESSION_ID>", "screens": 5}'
+dokobot read '<URL>' --session-id <SESSION_ID> --screens 5
 ```
-The browser tab stays open between calls. Sessions expire after 60s of inactivity.
-
-### search
-
-Search the web and return results.
-
-**Usage**: `/doko search <query>`
-
-**Arguments**: query = all arguments after "search"
-
+Close a session explicitly with:
 ```bash
-curl -s -X POST "https://dokobot.ai/api/tools/search" \
-  -H "Authorization: Bearer $DOKO_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "<QUERY>", "num": 5}'
+dokobot doko close <SESSION_ID>
 ```
 
-**Response schema**:
-```typescript
-{
-  items: Array<{
-      title: string
-      link: string
-      snippet: string
-      position?: number
-    }>
-  directAnswer?: string
-  knowledgeGraph?: {
-    title?: string
-    description?: string
-  }
-}
-```
+### Concurrency
+Multiple read requests can run in parallel (each opens a separate browser tab). Recommended maximum: **5 concurrent calls**.
 
-### dokos
-
-List connected dokos.
-
-**Usage**: `/doko dokos`
-
-```bash
-curl -s "https://dokobot.ai/api/tools/dokos" \
-  -H "Authorization: Bearer $DOKO_API_KEY"
-```
-
-**Response schema**:
-```typescript
-{
-  dokos: Array<{
-      id: string
-      name: string | null
-      type: "extension" | "chrome"
-      age: string | null
-    }>
-}
-```
-
-Use `id` as `deviceId` in read-page when multiple browsers are connected:
-```json
-{"url": "...", "screens": 3, "deviceId": "<device-id>"}
-```
-
-### mcp_list_tools
-
-List available MCP tools on a browser doko.
-
-**Usage**: `/doko mcp_list_tools [--device ID]`
-
-**Requires**: A browser doko connected via dokobot-cli.
-
-**Args**: $ARGUMENTS[1] $ARGUMENTS[2] $ARGUMENTS[3] $ARGUMENTS[4] $ARGUMENTS[5] $ARGUMENTS[6] $ARGUMENTS[7] $ARGUMENTS[8] $ARGUMENTS[9]
-
-First non-flag argument is . Named flags:
-- `--device ID` → `deviceId`: Target device ID (from `/doko dokos`)
-
-```bash
-curl -s "https://dokobot.ai/api/tools/mcp-list-tools" \
-  -H "Authorization: Bearer $DOKO_API_KEY"
-```
-
-**Response schema**:
-```typescript
-{
-  deviceId: string
-  deviceName: string
-  tools: Array<{
-      name: string
-      description?: string
-      inputSchema?: unknown
-    }>
-}
-```
-
-When `--device` is specified, add `?deviceId=<ID>` to the URL. If only one browser doko is online, it is auto-selected.
-
-### mcp_call_tool
-
-Call an MCP tool on a browser doko.
-
-**Usage**: `/doko mcp_call_tool <tool> [--device ID]`
-
-**Requires**: A browser doko connected via dokobot-cli.
-
-**Args**: $ARGUMENTS[1] $ARGUMENTS[2] $ARGUMENTS[3] $ARGUMENTS[4] $ARGUMENTS[5] $ARGUMENTS[6] $ARGUMENTS[7] $ARGUMENTS[8] $ARGUMENTS[9]
-
-First non-flag argument is `tool`. Named flags:
-- `--device ID` → `deviceId`: Target device ID (from `/doko dokos`)
-
-```bash
-curl -s -X POST "https://dokobot.ai/api/tools/mcp-call-tool" \
-  -H "Authorization: Bearer $DOKO_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"tool": "<TOOL_NAME>", "arguments": {}}'
-```
-
-Use `/doko mcp_list_tools` first to discover available tools and their parameters. Pass tool arguments in the `arguments` field. When `--device` is specified, add `"deviceId": "<ID>"` to the JSON body.
-
-### update
-
-Fetch the latest skill definition from the server with diff review before applying.
-
-**Usage**: `/doko update`
-
-Steps:
-1. Download to a temporary file:
-```bash
-curl -s "https://dokobot.ai/api/tools/skill" -o /tmp/doko-skill-update.md
-```
-2. Validate the download is non-empty and starts with valid frontmatter:
-```bash
-head -1 /tmp/doko-skill-update.md | grep -q "^---" && echo "OK" || echo "INVALID"
-```
-3. If validation fails, abort and delete the temp file. Do NOT proceed.
-4. Show the diff for review:
-```bash
-diff -u .claude/skills/doko/SKILL.md /tmp/doko-skill-update.md || true
-```
-5. **STOP and ask the user for explicit confirmation.** Do NOT overwrite without approval.
-6. Only after user confirms:
-```bash
-cp /tmp/doko-skill-update.md .claude/skills/doko/SKILL.md && rm /tmp/doko-skill-update.md
-```
-7. If the user declines, clean up: `rm /tmp/doko-skill-update.md`
-
-## Error Handling
+## Error handling
 - 401: Invalid API Key — ask user to check `DOKO_API_KEY`
 - 403: API Key scope insufficient
 - 422: Operation failed or was cancelled by user (read only)
 - 503: No extension connected (read only) — check read command requirements
-- 504: Timed out — read may take up to 5 minutes for long pages
+- 504: Timed out — retry with a longer `--timeout`
+
+## Troubleshooting
+If a command fails unexpectedly, check the CLI version and update if needed:
+```bash
+dokobot --version
+dokobot update
+```
+To report a bug or request a feature:
+```bash
+dokobot feedback -t bug -m "description of the issue"
+```
+
+## Security & Permissions
+- **Local-first architecture**: In local mode (`--local`), all data flows directly between the CLI and your browser via a local Unix socket. No data leaves your machine.
+- **End-to-end encryption**: In remote mode, page content is encrypted on the browser before transmission and decrypted only on the CLI. The server never sees plaintext page content.
+- **User-provisioned credentials**: `DOKO_API_KEY` is created and managed by the user. The skill never generates, stores, or exfiltrates credentials.
+- **Explicit opt-in**: Remote Control must be manually enabled in the browser extension by the user. Local mode requires no API key or server.
+- **Read-only by default**: the `read` and `search` commands only extract content. They do not modify pages, submit forms, or execute scripts.

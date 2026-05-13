@@ -1,5 +1,5 @@
 ---
-name: dokobot
+name: doko
 description: >-
   Read and extract content from any web page using a real Chrome browser — including SPAs, JavaScript-rendered sites, and complex dynamic pages. Use when fetching page content that headless tools can't render, searching the web, or reading fully rendered pages via your own browser.
 read_when:
